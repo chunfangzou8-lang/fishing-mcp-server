@@ -6,15 +6,32 @@ HTTP wrapper for MCP server - 用于 Render 部署
 
 from flask import Flask, request, jsonify
 import json
-import engine
+import os
+from engine import FishingEngine
 
 app = Flask(__name__)
+
+# 使用持久化存储目录（Render Disk 会挂载到这里）
+SAVE_DIR = os.environ.get('SAVE_DIR', '.')
+SAVE_FILE = os.path.join(SAVE_DIR, 'fishing_save.json')
+
+# 确保存档目录存在
+if SAVE_DIR != '.' and not os.path.exists(SAVE_DIR):
+    os.makedirs(SAVE_DIR, exist_ok=True)
+
+# 初始化游戏引擎（使用持久化路径）
+game_engine = FishingEngine(save_file=SAVE_FILE)
 
 
 @app.route('/health', methods=['GET'])
 def health():
     """健康检查端点"""
-    return jsonify({"status": "ok", "service": "fishing-mcp-server"})
+    return jsonify({
+        "status": "ok",
+        "service": "fishing-mcp-server",
+        "save_file": SAVE_FILE,
+        "save_exists": os.path.exists(SAVE_FILE)
+    })
 
 
 @app.route('/mcp', methods=['POST'])
@@ -82,7 +99,7 @@ def mcp_endpoint():
 
             if tool_name == "fishing_command":
                 command = arguments.get("command", "")
-                result = engine.cmd(command)
+                result = game_engine.cmd(command)
 
                 return jsonify({
                     "jsonrpc": "2.0",
@@ -94,7 +111,7 @@ def mcp_endpoint():
 
             elif tool_name == "fishing_new_game":
                 seed = arguments.get("seed", 0x9e3779b9)
-                result = engine.new_game(seed)
+                result = game_engine.new_game(seed)
 
                 return jsonify({
                     "jsonrpc": "2.0",
